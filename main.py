@@ -35,6 +35,9 @@ towns_exceptions = ["Йошкар-Ола", 'Каменск-Уральский', 
                     'Петропавловск-Камчатский', 'Ростов-на-Дону', 'Санкт-Петербург', 'Улан-Удэ',
                     'Ханты-Мансийск', 'Южно-Сахалинск']
 
+status = ["Отгадывание буквы", 'Отгадывание слова целиком', 'Выбор подсказки', 'Выбор режима игры']
+guess_letter, guess_word, choice_hint, choice_gamemode = status
+
 
 async def start(update, context: ContextTypes.DEFAULT_TYPE) -> LAUNCH_DIALOG:
     user = update.effective_user
@@ -56,6 +59,7 @@ async def launch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         context.user_data["guessed_letters"] = list()
         context.user_data["not_guessed_letters"] = context.user_data["guessed_town"][::]
         context.user_data["hints"] = 3
+        context.user_data['status'] = choice_gamemode
         await update.message.reply_text('Хорошо, сыграем! Я загадал, попробуй угадать! У '
                                         'тебя есть 3 подсказки.')
         await update.message.reply_text('Выбери один из вариантов.', reply_markup=keyboard)
@@ -66,14 +70,19 @@ async def launch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                         reply_markup=keyboard)
 
         return ConversationHandler.END
-    await update.message.reply_text('Выберите команду из предложенных кнопок')
+    await update.message.reply_text('Выберите команду из предложенных кнопок на клавиатуре')
     return LAUNCH_DIALOG
 
 
 async def letter_or_town(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     msg = update.message.text
-    keyboard = ReplyKeyboardMarkup([['Назову букву', 'Назову город целиком'], ['Подсказка']],
+    keyboard = ReplyKeyboardMarkup([['Назову букву', 'Назову город целиком'],
+                                    ['Подсказка', 'Помощь', 'Статус игры']],
                                    one_time_keyboard=True, resize_keyboard=True)
+    if msg == 'Статус игры':
+        await status(update, context)
+    if msg == 'Помощь':
+        await help_(update, context)
     if msg == 'Назову букву':
         await update.message.reply_html(
             'Хорошо! Называй букву из названия города.\nУгаданные буквы\n'
@@ -83,14 +92,22 @@ async def letter_or_town(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text('Хорошо! Называй название города целиком.',
                                         reply_markup=keyboard)
         return TOWN
-    await update.message.reply_text('Выберите команду из предложенных кнопок')
+    await update.message.reply_text('Выберите команду из предложенных кнопок на клавиатуре')
 
 
 async def hint(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     msg = update.message.text
     user_data = context.user_data
-    keyboard = ReplyKeyboardMarkup([['Назову букву', 'Назову город целиком']],
+    user_data["status"] = choice_hint
+    keyboard = ReplyKeyboardMarkup([['Назову букву', 'Назову город целиком'],
+                                    ['Помощь', 'Статус игры']],
                                    one_time_keyboard=True, resize_keyboard=True)
+    if msg == 'Статус игры':
+        await status(update, context)
+        return HINT
+    if msg == 'Помощь':
+        await help_(update, context)
+        return HINT
     if user_data["hints"] <= 0:
         await update.message.reply_text('Подсказок больше нет', reply_markup=keyboard)
         return LETTER_OR_TOWN
@@ -114,22 +131,21 @@ async def hint(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             return LAUNCH_DIALOG
         await update.message.reply_html(f'Угаданные буквы\n'
                                         f'<b>{" ".join(print_guessed_letters(context))}</b>')
-
     else:
-        await update.message.reply_text('Выберите команду из предложенных кнопок')
+        await update.message.reply_text('Выберите команду из предложенных кнопок на клавиатуре')
     return LETTER_OR_TOWN
-
-
-def keyboard_for_hint():
-    keyboard = ReplyKeyboardMarkup([['Назвать административный округ', 'Открыть букву']],
-                                   resize_keyboard=True, one_time_keyboard=True)
-    text = 'Выберите один из вариантов'
-    return [keyboard, text]
 
 
 async def check_letter(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     msg = update.message.text
     user_data = context.user_data
+    user_data["status"] = guess_letter
+    if msg == 'Статус игры':
+        await status(update, context)
+        return LETTER
+    if msg == 'Помощь':
+        await help_(update, context)
+        return LETTER
     if msg == 'Подсказка':
         await update.message.reply_text(keyboard_for_hint()[1], reply_markup=keyboard_for_hint()[0])
         return HINT
@@ -162,6 +178,13 @@ async def check_letter(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 async def check_town(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data = context.user_data
     msg = update.message.text
+    user_data["status"] = guess_word
+    if msg == 'Статус игры':
+        await status(update, context)
+        return TOWN
+    if msg == 'Помощь':
+        await help_(update, context)
+        return TOWN
     if msg == 'Подсказка':
         await update.message.reply_text(keyboard_for_hint()[1], reply_markup=keyboard_for_hint()[0])
         return HINT
@@ -184,7 +207,7 @@ async def check_town(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text('К сожалению, это неправильный ответ. Попробуй еще раз!',
                                         reply_markup=ReplyKeyboardMarkup(
                                             [['Назову букву', 'Назову город целиком'],
-                                             ['Подсказка']],
+                                             ['Подсказка', 'Помощь']],
                                             one_time_keyboard=True, resize_keyboard=True))
 
 
@@ -241,6 +264,14 @@ async def help_(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                                     '<b>/stop - Конец игры при уже запущенной игре</b>')
 
 
+async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if context.user_data.get("status", 0):
+        await update.message.reply_html(f'В данный момент ты на стадии игры:\n'
+                                        f'<b>{context.user_data["status"]}</b>')
+    else:
+        await update.message.reply_text("В данный момент ты не играешь.\nНачало игры - /start")
+
+
 if __name__ == '__main__':
     app = Application.builder().token(BOT_TOKEN).build()
     # app = Application.builder().token(dotenv_values()["BOT_TOKEN"]) FOR Glitch
@@ -268,5 +299,6 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('dev', dev))
     app.add_handler(CommandHandler('stats', statistics))
     app.add_handler(CommandHandler('help', help_))
+    app.add_handler(CommandHandler('status', status))
 
     app.run_polling()

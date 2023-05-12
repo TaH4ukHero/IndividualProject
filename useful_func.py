@@ -1,7 +1,7 @@
 import json
 import requests
 from bs4 import BeautifulSoup
-from telegram import ReplyKeyboardMarkup
+from telegram import ReplyKeyboardMarkup, Update
 # from dotenv import dotenv_values FOR Glitch
 from data.db_session import create_session
 from data.users import User
@@ -9,6 +9,8 @@ from data.users import User
 towns_exceptions = ["Йошкар-Ола", 'Каменск-Уральский', 'Комсомольск-на-Амуре', 'Орехово-Зуево',
                     'Петропавловск-Камчатский', 'Ростов-на-Дону', 'Санкт-Петербург', 'Улан-Удэ',
                     'Ханты-Мансийск', 'Южно-Сахалинск']
+
+LAUNCH_DIALOG, LETTER_OR_TOWN, LETTER, TOWN, HINT = range(5)
 
 
 def print_guessed_letters(context):
@@ -111,4 +113,12 @@ def fix_results(update, context, result: str) -> None:
         user.attempts += context.user_data['attempts']
     sess.commit()
     context.user_data.clear()  # Удаление информации об игре с пользователем
+
+
+def keyboard_for_hint():
+    keyboard = ReplyKeyboardMarkup([['Назвать административный округ'], ['Открыть букву','Помощь',
+                                                                         'Статус игры']],
+                                   resize_keyboard=True, one_time_keyboard=True)
+    text = 'Выберите один из вариантов'
+    return [keyboard, text]
 
